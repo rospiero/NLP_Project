@@ -1,3 +1,4 @@
 datasets/
 reviews_with_sentiment.csv
 reviews_with_sentiment_and_categories
+final_amazon_reviews_sentiment
