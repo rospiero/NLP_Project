@@ -46,4 +46,7 @@ with gr.Blocks() as demo:
 
     category_input.change(show_products, inputs=category_input, outputs=output)
 
-demo.launch(share=True)
+demo.launch()
+
+# share=True if I wanna make it public
+
