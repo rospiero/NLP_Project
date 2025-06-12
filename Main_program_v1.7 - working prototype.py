@@ -14,6 +14,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 import openai
+from datetime import datetime
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -346,19 +347,20 @@ print(f"Meta categories: {df_combined['meta_category'].value_counts()}")
 print(f"Sample product names: {df_combined['name'].head().tolist()}")
 
 # Create a function that generates a summary of the reviews for the top 3 products in a given meta-category
-def generate_summary(df, df_combined):
+def generate_summary(df, df_combined, output_filename=None):
     """
-    Generate product summaries and a comparison for top 3 products.
+    Generate product summaries and a comparison for top 3 products, saving results to CSV.
     
     Args:
         df (pd.DataFrame): Top products dataframe with columns: asin, product_name, category, 
                           review_count, avg_rating, avg_sentiment, recommend_ratio, helpfulness, composite_score
-        df_combined (pd.DataFrame): Combined reviews dataframe containing 'asin' and 'cleaned_text' columns
+        df_combined (pd.DataFrame): Combined reviews dataframe containing 'asins' and 'cleaned_text' columns
+        output_filename (str, optional): Custom filename for CSV output. If None, generates timestamp-based name.
     
     Returns:
-        str: A formatted summary with individual product summaries and a comparative conclusion.
+        str: Path to the generated CSV file
     """
-    summaries = []
+    summaries_data = []
     comparison_data = []
 
     for idx, row in df.iterrows():
@@ -369,6 +371,8 @@ def generate_summary(df, df_combined):
         avg_sentiment = row['avg_sentiment']
         recommend_ratio = row['recommend_ratio']
         helpfulness = row['helpfulness']
+        category = row['category']
+        composite_score = row['composite_score']
         
         # Get reviews for this specific product from df_combined
         product_reviews = df_combined[df_combined['asins'] == asin]['cleaned_text'].tolist()
@@ -376,62 +380,79 @@ def generate_summary(df, df_combined):
         # Handle case where no reviews are found
         if not product_reviews:
             summary_text = f"No reviews found for {product_name} (ASIN: {asin})"
-            summaries.append(summary_text)
-            continue
-        
-        # Limit reviews to avoid token limits (take first 10 reviews or combine if short)
-        if len(product_reviews) > 10:
-            formatted_reviews = "\n\n".join(product_reviews[:10])
-            review_note = f"(Showing first 10 out of {len(product_reviews)} reviews)"
+            review_count_used = 0
+            review_note = "No reviews available"
         else:
-            formatted_reviews = "\n\n".join(product_reviews)
-            review_note = f"(All {len(product_reviews)} reviews included)"
+            # Limit reviews to avoid token limits (take first 10 reviews or combine if short)
+            if len(product_reviews) > 10:
+                formatted_reviews = "\n\n".join(product_reviews[:10])
+                review_note = f"Showing first 10 out of {len(product_reviews)} reviews"
+                review_count_used = 10
+            else:
+                formatted_reviews = "\n\n".join(product_reviews)
+                review_note = f"All {len(product_reviews)} reviews included"
+                review_count_used = len(product_reviews)
         
-        # Convert sentiment score to descriptive text
-        if avg_sentiment >= 0.6:
-            sentiment_desc = "very positive"
-        elif avg_sentiment >= 0.2:
-            sentiment_desc = "positive"
-        elif avg_sentiment >= -0.2:
-            sentiment_desc = "neutral"
-        elif avg_sentiment >= -0.6:
-            sentiment_desc = "negative"
-        else:
-            sentiment_desc = "very negative"
+            # Convert sentiment score to descriptive text
+            if avg_sentiment >= 0.6:
+                sentiment_desc = "very positive"
+            elif avg_sentiment >= 0.2:
+                sentiment_desc = "positive"
+            elif avg_sentiment >= -0.2:
+                sentiment_desc = "neutral"
+            elif avg_sentiment >= -0.6:
+                sentiment_desc = "negative"
+            else:
+                sentiment_desc = "very negative"
 
-        prompt = f"""
-        You are an expert product reviewer.
-        Summarize the following customer reviews for the product: '{product_name}'
-        Write a maximum 5 lines summary, very tech-oriented.
+            prompt = f"""
+            You are an expert product reviewer.
+            Summarize the following customer reviews for the product: '{product_name}'
+            Write a maximum 5 lines summary, very tech-oriented.
 
-        Product Details:
-        - Product name: {product_name}
-        - Average rating: {avg_score:.2f}/5.0 ({review_count} reviews)
-        - Average sentiment: {sentiment_desc} ({avg_sentiment:.2f})
-        - Recommendation ratio: {recommend_ratio:.1%}
-        - Review helpfulness: {helpfulness:.2f}
-        
-        Customer Reviews {review_note}:
-        {formatted_reviews}
-        
-        Focus on technical aspects, build quality, performance, and value proposition.
-        """
+            Product Details:
+            - Product name: {product_name}
+            - Average rating: {avg_score:.2f}/5.0 ({review_count} reviews)
+            - Average sentiment: {sentiment_desc} ({avg_sentiment:.2f})
+            - Recommendation ratio: {recommend_ratio:.1%}
+            - Review helpfulness: {helpfulness:.2f}
+            
+            Customer Reviews {review_note}:
+            {formatted_reviews}
+            
+            Focus on technical aspects, build quality, performance, and value proposition.
+            """
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a technical product analyst specializing in portable electronics. Focus on technical specifications, performance metrics, and practical user experience."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=300,
-                temperature=0.3  # Lower temperature for more consistent technical summaries
-            )
-            summary_text = response.choices[0].message.content.strip()
-        except Exception as e:
-            summary_text = f"Error summarizing {product_name}: {e}"
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are a technical product analyst specializing in portable electronics. Focus on technical specifications, performance metrics, and practical user experience."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=300,
+                    temperature=0.3  # Lower temperature for more consistent technical summaries
+                )
+                summary_text = response.choices[0].message.content.strip()
+            except Exception as e:
+                summary_text = f"Error summarizing {product_name}: {e}"
 
-        summaries.append(f"**{product_name}**\n{summary_text}")
+        # Store individual product summary data
+        summaries_data.append({
+            'asin': asin,
+            'product_name': product_name,
+            'category': category,
+            'avg_rating': avg_score,
+            'review_count': review_count,
+            'avg_sentiment': avg_sentiment,
+            'sentiment_description': sentiment_desc if product_reviews else "N/A",
+            'recommend_ratio': recommend_ratio,
+            'helpfulness': helpfulness,
+            'composite_score': composite_score,
+            'reviews_used_for_summary': review_count_used,
+            'summary': summary_text,
+            'review_note': review_note
+        })
         
         # Store comparison data
         comparison_data.append({
@@ -441,36 +462,58 @@ def generate_summary(df, df_combined):
             "sentiment": avg_sentiment,
             "recommend": recommend_ratio,
             "helpfulness": helpfulness,
-            "composite": row['composite_score']
+            "composite": composite_score
         })
 
-    # Create a detailed comparison summary
-    comparison_summary = "\n\n## Product Comparison\n"
-    comparison_summary += "| Product | Rating | Reviews | Sentiment | Recommend % | Helpfulness | Composite |\n"
-    comparison_summary += "|---------|--------|---------|-----------|-------------|-------------|----------|\n"
+    # Create DataFrame from summaries data
+    summary_df = pd.DataFrame(summaries_data)
     
-    for product in comparison_data:
-        comparison_summary += (
-            f"| {product['name'][:30]}{'...' if len(product['name']) > 30 else ''} | "
-            f"{product['rating']:.2f} | {product['reviews']} | {product['sentiment']:.2f} | "
-            f"{product['recommend']:.1%} | {product['helpfulness']:.2f} | {product['composite']:.2f} |\n"
-        )
+    # Add ranking information
+    summary_df['rating_rank'] = summary_df['avg_rating'].rank(ascending=False, method='min').astype(int)
+    summary_df['composite_rank'] = summary_df['composite_score'].rank(ascending=False, method='min').astype(int)
+    summary_df['review_count_rank'] = summary_df['review_count'].rank(ascending=False, method='min').astype(int)
     
-    # Add key insights
-    best_rated = max(comparison_data, key=lambda x: x['rating'])
-    most_reviewed = max(comparison_data, key=lambda x: x['reviews'])
-    highest_composite = max(comparison_data, key=lambda x: x['composite'])
-    
-    insights = f"\n\n## Key Insights\n"
-    insights += f"- **Highest Rated**: {best_rated['name']} ({best_rated['rating']:.2f}/5.0)\n"
-    insights += f"- **Most Reviewed**: {most_reviewed['name']} ({most_reviewed['reviews']} reviews)\n"
-    insights += f"- **Best Overall Score**: {highest_composite['name']} (composite: {highest_composite['composite']:.2f})\n"
+    # Add key insights as additional rows or separate sheet data
+    if comparison_data:
+        best_rated = max(comparison_data, key=lambda x: x['rating'])
+        most_reviewed = max(comparison_data, key=lambda x: x['reviews'])
+        highest_composite = max(comparison_data, key=lambda x: x['composite'])
+        
+        # Create insights summary
+        insights_data = [
+            {'metric': 'Highest Rated Product', 'product_name': best_rated['name'], 'value': f"{best_rated['rating']:.2f}/5.0"},
+            {'metric': 'Most Reviewed Product', 'product_name': most_reviewed['name'], 'value': f"{most_reviewed['reviews']} reviews"},
+            {'metric': 'Best Overall Score', 'product_name': highest_composite['name'], 'value': f"{highest_composite['composite']:.2f}"}
+        ]
+        insights_df = pd.DataFrame(insights_data)
+    else:
+        insights_df = pd.DataFrame()
 
-    return "\n\n".join(summaries) + comparison_summary + insights
-# Test the summary generation function
-summary_text =generate_summary(top_products, df_combined)
-print("\nGenerated Summary:")
-print(summary_text)
+    # Generate filename if not provided
+    if output_filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"product_summary_{timestamp}.csv"
+    
+    # Ensure .csv extension
+    if not output_filename.endswith('.csv'):
+        output_filename += '.csv'
+    
+    # Save main summary to CSV
+    summary_df.to_csv(output_filename, index=False, encoding='utf-8')
+    
+    # Save insights to separate CSV if there are insights
+    if not insights_df.empty:
+        insights_filename = output_filename.replace('.csv', '_insights.csv')
+        insights_df.to_csv(insights_filename, index=False, encoding='utf-8')
+        print(f"Product summaries saved to: {output_filename}")
+        print(f"Key insights saved to: {insights_filename}")
+        return output_filename, insights_filename
+    else:
+        print(f"Product summaries saved to: {output_filename}")
+        return output_filename
+
+# using the function with custom filename
+output_file = generate_summary(top_products, df_combined, "Top_Products_Summary_Portable_Electronics.csv")
 
 
 # We then put all the models together in a single function that takes as input a user query (in the shape of one of the six meta-categories) 
