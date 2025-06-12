@@ -2,7 +2,7 @@ import pandas as pd
 import gradio as gr
 
 # Load CSV once at startup
-df = pd.read_csv("output/test.csv")
+df = pd.read_csv("output/final_product_summary.csv")
 
 # Get unique category clusters
 category_clusters = sorted(df['category_cluster'].unique())
@@ -11,7 +11,9 @@ category_clusters = sorted(df['category_cluster'].unique())
 def show_products(selected_category):
     filtered_df = df[df['category_cluster'] == selected_category]
 
-    # Build list of product cards as markdown
+    if filtered_df.empty:
+        return "⚠ No products found for this category."
+
     cards = ""
     for _, row in filtered_df.iterrows():
         product_name = row['name']
@@ -22,7 +24,7 @@ def show_products(selected_category):
         card = f"""
 ### {product_name}
 
-![Product Image]({image_url})
+<img src="{image_url}" alt="{product_name}" width="300"/>
 
 **Average Positive Rating:** {rating} ⭐  
 **Summary:**  

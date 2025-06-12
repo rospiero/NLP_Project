@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import joblib
 import openai
+import urllib.parse
 from dotenv import load_dotenv
 
 # ========== 1️⃣ Load environment & API key ==========
@@ -84,29 +85,34 @@ for idx, row in top_products.iterrows():
 
 top_products['summary'] = summaries
 
-# ========== 8️⃣ Extract first or second image URL ==========
-def extract_image_urls(url_string):
+
+# ========== 8️⃣ Extract first valid image URL ==========
+
+def extract_best_image_url(url_string):
     """
-    Given a string of comma-separated URLs, return a fallback-safe URL:
-    Try first URL, if empty or invalid, try second URL,
-    else return placeholder.
+    Extract the best valid image URL from a comma-separated list.
+    Decodes URL-encoded parts, filters for known image hosts.
     """
     placeholder = "https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg"
     
     if pd.isna(url_string) or not url_string.strip():
         return placeholder
-    
+
     urls = [url.strip() for url in url_string.split(",") if url.strip()]
     
-    # Try first image
-    if len(urls) > 0 and urls[0]:
-        return urls[0]
-    # Fallback to second image
-    if len(urls) > 1 and urls[1]:
-        return urls[1]
-    
-    return placeholder
+    trusted_domains = [
+        'amazon.com',
+        'ebayimg.com'
+    ]
 
+    for url in urls:
+        decoded_url = urllib.parse.unquote(url)
+        for domain in trusted_domains:
+            if domain in decoded_url:
+                return decoded_url  # return first valid match
+
+    # fallback if none matched
+    return placeholder
 # ========== 9️⃣ Merge additional info and apply image extraction ==========
 df_final = pd.merge(
     top_products,
@@ -115,7 +121,7 @@ df_final = pd.merge(
     how='left'
 )
 
-df_final['image_url'] = df_final['imageURLs'].apply(extract_image_urls)
+df_final['image_url'] = df_final['imageURLs'].apply(extract_best_image_url)
 
 # ========== 🔟 Compute avg positive rating ==========
 def compute_avg_rating(product_name):
