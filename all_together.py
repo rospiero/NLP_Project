@@ -10,7 +10,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI()
 
 # ========== 2️⃣ Load saved models and mappings ==========
-tfidf = joblib.load("tfidf_vectorizer.joblib")
+tfidf = joblib.load("Joblib_files/tfidf_vectorizer.joblib")
 label_encoder = joblib.load("label_encoder.joblib")
 rf_clf = joblib.load("random_forest_model.joblib")
 unique_categories_dict = joblib.load("Clustering_model/unique_categories_dict.pkl")
