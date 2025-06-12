@@ -2,7 +2,7 @@ import pandas as pd
 import gradio as gr
 
 # Load CSV once at startup
-df = pd.read_csv("final_product_summary.csv")
+df = pd.read_csv("output/test.csv")
 
 # Get unique category clusters
 category_clusters = sorted(df['category_cluster'].unique())
