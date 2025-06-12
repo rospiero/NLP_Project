@@ -11,8 +11,8 @@ client = openai.OpenAI()
 
 # ========== 2️⃣ Load saved models and mappings ==========
 tfidf = joblib.load("Joblib_files/tfidf_vectorizer.joblib")
-label_encoder = joblib.load("label_encoder.joblib")
-rf_clf = joblib.load("random_forest_model.joblib")
+label_encoder = joblib.load("Joblib_files/label_encoder.joblib")
+rf_clf = joblib.load("Joblib_files/random_forest_model.joblib")
 unique_categories_dict = joblib.load("Clustering_model/unique_categories_dict.pkl")
 
 # ========== 3️⃣ Load dataset ==========
