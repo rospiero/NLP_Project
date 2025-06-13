@@ -300,7 +300,7 @@ available_categories = df_combined['meta_category'].unique()
 print("Available categories:", available_categories)
 
 # Use a category that actually exists in your data
-target_category = 'Portable Electronics'  # Note: have user deliver input for category selection
+target_category = 'Pet Products'  # Note: have user deliver input for category selection
 if target_category not in available_categories:
     target_category = available_categories[0]  # Use first available category
     print(f"Using category: {target_category}")
@@ -377,6 +377,10 @@ def generate_summary(df, df_combined, output_filename=None):
         # Get reviews for this specific product from df_combined
         product_reviews = df_combined[df_combined['asins'] == asin]['cleaned_text'].tolist()
         
+        # Get image URL for this product
+        product_images = df_combined[df_combined['asins'] == asin]['imageURLs'].tolist()
+        image_url = product_images[0] if product_images else "No image available"
+        
         # Handle case where no reviews are found
         if not product_reviews:
             summary_text = f"No reviews found for {product_name} (ASIN: {asin})"
@@ -442,6 +446,7 @@ def generate_summary(df, df_combined, output_filename=None):
             'asin': asin,
             'product_name': product_name,
             'category': category,
+            'image_url': image_url,
             'avg_rating': avg_score,
             'review_count': review_count,
             'avg_sentiment': avg_sentiment,
@@ -507,13 +512,14 @@ def generate_summary(df, df_combined, output_filename=None):
         insights_df.to_csv(insights_filename, index=False, encoding='utf-8')
         print(f"Product summaries saved to: {output_filename}")
         print(f"Key insights saved to: {insights_filename}")
-        return output_filename, insights_filename
     else:
         print(f"Product summaries saved to: {output_filename}")
-        return output_filename
+    
+    # Always return just the main CSV filename for consistency
+    return output_filename
 
 # using the function with custom filename
-output_file = generate_summary(top_products, df_combined, "Top_Products_Summary_Portable_Electronics.csv")
+output_file = generate_summary(top_products, df_combined, "Top_Products_Summary_Batteries.csv")
 
 
 # We then put all the models together in a single function that takes as input a user query (in the shape of one of the six meta-categories) 
